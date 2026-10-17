@@ -59,6 +59,7 @@ class aircraft:
 
         return tw
 
+    #This is to plot my diagram
     def plot_constraint_diagram(self):
         # Final output for the class, displays the constarint diagrams
         plot, axes = plt.Figure()
