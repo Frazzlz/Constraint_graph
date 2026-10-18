@@ -19,7 +19,7 @@ class aircraft:
         v_stall: float = 10,
         C_D0: float = 0.075,
         roll_resistance: float = 0.1, 
-        TO_mass: float = 5, #kg
+        TO_mass: float = 3, #kg
         resolution: int = 20,
     ) -> None:
 
@@ -32,11 +32,9 @@ class aircraft:
         self.weight = self.TO_mass * self.g  # N
 
         # plotting params
-        self.resolution = (
-            resolution  # resolution for x scale on axis. W/S number of points
-        )
+        self.resolution = resolution  # resolution for x scale on axis. W/S number of points
         self.ws = np.linspace(
-            10, 50, self.resolution
+            5, 90, self.resolution
         ) # construct array of take wing loading values to plot against
 
         #intialise an empty dictionary container for constraint results
@@ -62,35 +60,46 @@ class aircraft:
 
         return tw
 
+    def build_all_constraints(self):
+        #Get various constraint tw values
+        self.constraints.update(
+            {
+                ("ground_roll","array"): self.tw_ground_roll(S_g = 40, CD_lof = self.C_D0*1.1, CL_lof = 0.8),
+                ("speed_stall","value"): self.ws_stall(),
+            }
+        )
+
     #builds graph with formatting
     def construct_graph(self):
         fig, ax = plt.subplots()
 
         return (fig, ax)
-
-    def build_all_constraints(self):
-        #Get various constraint tw values
-        self.constraints.update(
-            {
-                "ground_roll": self.tw_ground_roll(S_g = 40, CD_lof = self.C_D0*1.1, CL_lof = 0.8),
-                "speed_stall": self.ws_stall(),
-
-            }
-        )
-
+    
     def plot_constraint_diagram(self):
         # Final output for the class, displays the constarint diagrams
-        fig,ax = self.construct_graph()
+        fig, ax = self.construct_graph()
 
         #iterate over dictionary of constraints and plot
-        for tw in self.constraints.keys
-        ax.plot(self.ws, )
-        return None
+        for key, value in self.constraints.items():
+            #Choose whether to pot claculated vales as an array aginst w/s or as a vertical w/s line
+            if key[1] == 'array':
+                ax.plot(self.ws, value, label = key[0])
+            elif key[1] == 'value':
+                ax.vlines(value, 0, 0.8, label = key[0])
+            else:
+                raise ValueError(f"The passed data type is not supported: {value}")
+
+        legend = ax.legend(loc = 'upper center')
+        plt.show()
+
 
 #Run program
 def main():
+    #run analysis for plane 1
     plane1 = aircraft()
-    tw_ground_roll = plane1.plot_constraint_diagram()
+    plane1.build_all_constraints()
+    plane1.plot_constraint_diagram()
+
 
 if __name__ == "__main__":
     main()
