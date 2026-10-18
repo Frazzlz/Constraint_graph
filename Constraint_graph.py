@@ -16,20 +16,27 @@ class aircraft:
     def __init__(
         self,
         CL_max: float = 1.2,
-        v_stall: float = 10,
         C_D0: float = 0.075,
         roll_resistance: float = 0.1, 
-        TO_mass: float = 3, #kg
-        resolution: int = 20,
+        TO_mass: float = 5, #kg
+        AR: float = 10,
+        oswald_e: float = 0.8,
+        resolution: int = 20
     ) -> None:
 
+        #params are separated into aircraft dependent and performance dependent
+        #aircraft params
         self.CL_max = CL_max  # dimensionless
-        self.v_stall = v_stall  # m/s
         self.C_D0 = C_D0
         self.roll_resistance = roll_resistance  # friction for take off
         self.g = 9.81  # gravity
         self.TO_mass = TO_mass  # kg
         self.weight = self.TO_mass * self.g  # N
+        self.AR = AR
+        self.oswald_e = oswald_e
+
+        #find induced drag constant k from known aproximate properties
+        self.K = 1 / (np.pi * self.oswald_e * self.AR)
 
         # plotting params
         self.resolution = resolution  # resolution for x scale on axis. W/S number of points
@@ -40,16 +47,16 @@ class aircraft:
         #intialise an empty dictionary container for constraint results
         self.constraints = {}
 
-    def _dynamic_p(self, v):
+    def _dynamic_p(self, v: float):
         """Return the dynamic pressure at sea level for a given velocity"""
         return 0.5 * 1.225 * v**2
 
-    def ws_stall(self):
+    def ws_stall(self, v_stall: float):
         "Get the wing loading based on stall speed requirements"
-        return self._dynamic_p(self.v_stall) * self.CL_max
+        return self._dynamic_p(v_stall) * self.CL_max
 
-    def tw_ground_roll(self, S_g, CD_lof, CL_lof) -> np.ndarray:
-        v_lof = 1.2 * self.v_stall
+    def tw_ground_roll(self, S_g: float, CD_lof: float, CL_lof: float, v_stall: float) -> np.ndarray:
+        v_lof = 1.2 * v_stall
         q_lof = self._dynamic_p(0.7 * v_lof)
 
         tw = (
@@ -60,18 +67,76 @@ class aircraft:
 
         return tw
 
-    def build_all_constraints(self):
-        #Get various constraint tw values
+    def tw_max_cruise_speed(self, v_cruise_max: float):
+        """Calculate the T/W required for a given max cruise speed"""
+        q_cvmax = self._dynamic_p(v_cruise_max)
+
+        tw = ((q_cvmax * self.C_D0) / self.ws) + (self.K/q_cvmax) * self.ws
+
+        return tw
+
+    def tw_turn_radius(self, v_turn, R_turn):
+        """Calculate the T/W for a given turn radius at given turn speed"""
+        q_turn = self._dynamic_p(v_turn)
+        n_squared = (((v_turn ** 2) / (self.g * R_turn)) ** 2) + 1
+
+        tw = ((q_turn * self.C_D0) / self.ws) + (self.K/q_turn) * self.ws * n_squared
+
+        return tw
+
+    def build_all_constraints(
+            self,
+            v_stall: float,
+            S_g: float,
+            v_cruise_max: float,
+            R_turn: float,
+            v_turn: float | None = None,
+            CD_lof: float | None = None,
+            CL_lof: float | None = None
+    ):
+        """The main builder function that computes all constraints and gives takes all target performace metrics"""
+
+        #Set CD_lof to basic value based on cruise config with losses for low reynods if no entry
+        if not CD_lof:
+            CD_lof = self.C_D0*1.1
+
+        #set CL_lof to crusie value if not provided. Account for low reynolds with scaling factor
+        if not CL_lof:
+            CL_lof = self.CL_max * 0.95
+
+        #If no turn radius provided then set it the max speed
+        if not v_turn:
+            v_turn = v_cruise_max
+
+        #Get various constraint tw values from entered list of target performance metrics
+        #Key is the constraint name and the data type, must be array or value to be plotted correctley
         self.constraints.update(
             {
-                ("ground_roll","array"): self.tw_ground_roll(S_g = 40, CD_lof = self.C_D0*1.1, CL_lof = 0.8),
-                ("speed_stall","value"): self.ws_stall(),
+                ("ground_roll","array"): self.tw_ground_roll(S_g = S_g, CD_lof = CD_lof, CL_lof = CL_lof, v_stall = v_stall),
+                ("Stall_speed","value"): self.ws_stall(v_stall = v_stall),
+                ("max_cruise_speed", "array"): self.tw_max_cruise_speed(v_cruise_max = v_cruise_max),
+                ("turn_radius", "array"): self.tw_turn_radius(v_turn = v_turn, R_turn = R_turn)
             }
         )
 
     #builds graph with formatting
     def construct_graph(self):
+        #set style of graphs
+        plt.style.use('bmh')
+
+        #create graph objects
         fig, ax = plt.subplots()
+
+        #graph limits
+        ax.set_ylim(0.1, 0.8)
+
+        #Configure text displays on the graph
+        ax.set_xlabel("W/S")
+        ax.set_ylabel("T/W")
+        ax.set_title("Sizing Constraint Diagram")
+
+        #enable grid
+        ax.grid(True, "both")
 
         return (fig, ax)
     
@@ -85,7 +150,7 @@ class aircraft:
             if key[1] == 'array':
                 ax.plot(self.ws, value, label = key[0])
             elif key[1] == 'value':
-                ax.vlines(value, 0, 0.8, label = key[0])
+                ax.vlines(value, 0.1, 0.5, label = key[0])
             else:
                 raise ValueError(f"The passed data type is not supported: {value}")
 
@@ -97,7 +162,7 @@ class aircraft:
 def main():
     #run analysis for plane 1
     plane1 = aircraft()
-    plane1.build_all_constraints()
+    plane1.build_all_constraints(v_stall = 10, S_g = 40, v_cruise_max = 22, R_turn = 100)
     plane1.plot_constraint_diagram()
 
 
