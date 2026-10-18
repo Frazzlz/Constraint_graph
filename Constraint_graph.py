@@ -16,10 +16,10 @@ class aircraft:
     def __init__(
         self,
         CL_max: float = 1.2,
-        v_stall: float = 12,
+        v_stall: float = 10,
         C_D0: float = 0.075,
-        roll_resistance: float = 0.1,
-        TO_mass: float = 5,
+        roll_resistance: float = 0.1, 
+        TO_mass: float = 5, #kg
         resolution: int = 20,
     ) -> None:
 
@@ -38,6 +38,9 @@ class aircraft:
         self.ws = np.linspace(
             10, 50, self.resolution
         ) # construct array of take wing loading values to plot against
+
+        #intialise an empty dictionary container for constraint results
+        self.constraints = {}
 
     def _dynamic_p(self, v):
         """Return the dynamic pressure at sea level for a given velocity"""
@@ -59,17 +62,35 @@ class aircraft:
 
         return tw
 
-    #This is to plot my diagram
+    #builds graph with formatting
+    def construct_graph(self):
+        fig, ax = plt.subplots()
+
+        return (fig, ax)
+
+    def build_all_constraints(self):
+        #Get various constraint tw values
+        self.constraints.update(
+            {
+                "ground_roll": self.tw_ground_roll(S_g = 40, CD_lof = self.C_D0*1.1, CL_lof = 0.8),
+                "speed_stall": self.ws_stall(),
+
+            }
+        )
+
     def plot_constraint_diagram(self):
         # Final output for the class, displays the constarint diagrams
-        plot, axes = plt.Figure()
-        axes.plot(...)
+        fig,ax = self.construct_graph()
+
+        #iterate over dictionary of constraints and plot
+        for tw in self.constraints.keys
+        ax.plot(self.ws, )
         return None
 
+#Run program
+def main():
+    plane1 = aircraft()
+    tw_ground_roll = plane1.plot_constraint_diagram()
 
 if __name__ == "__main__":
-    plane1 = aircraft()
-    tw_lift_off = plane1.tw_ground_roll(60, 0.05, 0.7)
-
-    print(tw_lift_off)
-    print(__name__ == "__main__")
+    main()
