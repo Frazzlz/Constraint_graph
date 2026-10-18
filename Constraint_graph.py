@@ -19,10 +19,8 @@ class aircraft:
         CL_max: float,
         C_D0: float,
         roll_resistance: float,
-        TO_mass: float,  # kg
         AR: float,
         oswald_e: float,
-        resolution: int = 30,
         **kwargs
     ) -> None:
 
@@ -35,8 +33,6 @@ class aircraft:
         self.CL_max = CL_max  # dimensionless
         self.C_D0 = C_D0
         self.roll_resistance = roll_resistance  # friction for take off
-        self.TO_mass = TO_mass  # kg
-        self.weight = self.TO_mass * self.g  # N
         self.AR = AR
         self.oswald_e = oswald_e
 
@@ -44,9 +40,8 @@ class aircraft:
         self.K = 1 / (np.pi * self.oswald_e * self.AR)
 
         # plotting params
-        self.resolution = (
-            resolution  # resolution for x scale on axis. W/S number of points
-        )
+        self.resolution = 45  # resolution for x scale on axis. W/S number of points
+
         self.ws = np.linspace(
             5, 150, self.resolution
         )  # construct array of take wing loading values to plot against
@@ -173,35 +168,108 @@ class aircraft:
         )
 
     # builds graph with formatting
-    def construct_graph(self):
-        # set style of graphs
+    def construct_graph(
+        self,
+        aircraft_params: dict[str, float | int],
+        performance_targets: dict[str, float | int],
+    ):
         plt.style.use("tableau-colorblind10")
 
-        # create graph objects
-        fig, ax = plt.subplots()
+        fig = plt.figure(figsize=(13, 7), layout="constrained")
+        grid = fig.add_gridspec(2, 2, width_ratios=(3.2, 1.5))
+        ax = fig.add_subplot(grid[:, 0])
+        aircraft_info_ax = fig.add_subplot(grid[0, 1])
+        performance_info_ax = fig.add_subplot(grid[1, 1])
 
-        # graph limits
-        ax.set_ylim(0.1, 0.8)  # hard limit on t/w for a reasonable range
-        ax.set_xlim(
-            self.ws[0], self.ws[-1]
-        )  # limit x axis to the computed range of w/s values
+        ax.set_xlim(self.ws[0], self.ws[-1])
+        ax.set_ylim(0.1, 0.8)
 
-        # Configure text displays on the graph
-        ax.set_xlabel(r"$W/S$")
-        ax.set_ylabel(r"$T/W$")
-        ax.set_title("Sizing Constraint Diagram")
+        ax.set_xlabel(r"Wing loading, $W/S$ (N/m$^2$)", labelpad=10)
+        ax.set_ylabel(r"Thrust-to-weight ratio, $T/W$", labelpad=10)
+        ax.set_title("Aircraft Performance Constraints", pad=14, weight="bold")
 
-        # set colors
         colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
 
-        # enable grid
-        ax.grid(True, "both")
+        ax.set_axisbelow(True)
+        ax.minorticks_on()
+        ax.grid(which="major", color="#b8bec5", linewidth=0.8, alpha=0.7)
+        ax.grid(which="minor", color="#d9dde1", linewidth=0.5, linestyle=":", alpha=0.7)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.tick_params(axis="both", which="major", direction="out", length=5)
+        ax.tick_params(axis="both", which="minor", direction="out", length=3)
 
-        return (fig, ax, colors)
+        aircraft_labels = {
+            "CL_max": ("Maximum lift coefficient", ""),
+            "C_D0": ("Zero-lift drag coefficient", ""),
+            "roll_resistance": ("Takeoff rolling resistance", ""),
+            "AR": ("Aspect ratio", ""),
+            "oswald_e": ("Oswald efficiency factor", "")
+        }
+        performance_labels = {
+            "v_stall": ("Stall speed", "m/s"),
+            "S_g": ("Ground roll distance", "m"),
+            "v_cruise_max": ("Maximum cruise speed", "m/s"),
+            "R_turn": ("Turn radius", "m"),
+            "climb_rate": ("Climb rate", "m/s"),
+            "v_turn": ("Turn speed", "m/s"),
+        }
 
-    def plot_constraint_diagram(self):
+        def format_parameters(
+            parameters: dict[str, float | int],
+            labels: dict[str, tuple[str, str]],
+        ) -> str:
+            lines = []
+            for name, value in parameters.items():
+                label, unit = labels.get(name, (name.replace("_", " ").title(), ""))
+                formatted_value = f"{value:g}" if isinstance(value, (int, float)) else str(value)
+                suffix = f" {unit}" if unit else ""
+                lines.append(f"{label}: {formatted_value}{suffix}")
+            return "\n".join(lines)
+
+        for info_ax, title, parameters, labels in (
+            (aircraft_info_ax, "Aircraft parameters", aircraft_params, aircraft_labels),
+            (
+                performance_info_ax,
+                "Assumed performance metrics",
+                performance_targets,
+                performance_labels,
+            ),
+        ):
+            info_ax.set_axis_off()
+            info_ax.text(
+                0.03,
+                0.96,
+                title,
+                transform=info_ax.transAxes,
+                va="top",
+                fontsize=11,
+                fontweight="bold",
+            )
+            info_ax.text(
+                0.03,
+                0.84,
+                format_parameters(parameters, labels),
+                transform=info_ax.transAxes,
+                va="top",
+                fontsize=9,
+                linespacing=1.6,
+                bbox={
+                    "boxstyle": "round,pad=0.7",
+                    "facecolor": "white",
+                    "edgecolor": "#b8bec5",
+                    "linewidth": 0.8,
+                },
+            )
+
+        return fig, ax, colors
+
+    def plot_constraint_diagram(
+        self,
+        aircraft_params: dict[str, float | int],
+        performance_targets: dict[str, float | int],
+    ):
         # Final output for the class, displays the constarint diagrams
-        fig, ax, colors = self.construct_graph()
+        fig, ax, colors = self.construct_graph(aircraft_params, performance_targets)
 
         # iterate over dictionary of constraints and plot
         for key, value in self.constraints.items():
@@ -224,23 +292,22 @@ def main():
         "CL_max": 1.2,
         "C_D0": 0.075,
         "roll_resistance": 0.1,
-        "TO_mass": 5,  # kg
         "AR": 12,
-        "oswald_e": 0.8,
+        "oswald_e": 0.75
     }
     aircraft1_performance_targets = {
-        "v_stall": 12,
-        "S_g": 40,
-        "v_cruise_max": 22,
-        "R_turn": 50,
+        "v_stall": 10,
+        "S_g": 60,
+        "v_cruise_max": 20,
+        "R_turn": 30,
         "climb_rate": 1.66,
+        "v_turn": 18
     }
 
     # run analysis for plane 1
     plane1 = aircraft(**aircraft1_params)
-    print(f"The turn load factor is: {plane1._turn_load_factor_squared(22, 100)}")
     plane1.build_all_constraints(**aircraft1_performance_targets)
-    plane1.plot_constraint_diagram()
+    plane1.plot_constraint_diagram(aircraft1_params, aircraft1_performance_targets)
 
 
 # run program
