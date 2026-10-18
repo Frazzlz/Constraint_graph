@@ -25,11 +25,14 @@ class aircraft:
     ) -> None:
 
         #params are separated into aircraft dependent and performance dependent
+        #environemnt params
+        self.rho: float = 1.225 #air density
+        self.g: float = 9.81  # gravity
+
         #aircraft params
         self.CL_max = CL_max  # dimensionless
         self.C_D0 = C_D0
         self.roll_resistance = roll_resistance  # friction for take off
-        self.g = 9.81  # gravity
         self.TO_mass = TO_mass  # kg
         self.weight = self.TO_mass * self.g  # N
         self.AR = AR
@@ -41,7 +44,7 @@ class aircraft:
         # plotting params
         self.resolution = resolution  # resolution for x scale on axis. W/S number of points
         self.ws = np.linspace(
-            5, 90, self.resolution
+            5, 150, self.resolution
         ) # construct array of take wing loading values to plot against
 
         #intialise an empty dictionary container for constraint results
@@ -49,7 +52,7 @@ class aircraft:
 
     def _dynamic_p(self, v: float):
         """Return the dynamic pressure at sea level for a given velocity"""
-        return 0.5 * 1.225 * v**2
+        return 0.5 * self.rho * v**2
 
     def ws_stall(self, v_stall: float):
         "Get the wing loading based on stall speed requirements"
@@ -77,7 +80,6 @@ class aircraft:
 
     def _turn_load_factor_squared(self, v_turn: float, R_turn: float):
             """Helper to get the square of the load factor in a turn given the velocity and radius"""
-
             n_squared = (((v_turn ** 2) / (self.g * R_turn)) ** 2) + 1
 
             return n_squared
@@ -86,6 +88,7 @@ class aircraft:
         """Calculate the T/W for a given turn radius at given turn speed"""
         q_turn = self._dynamic_p(v_turn)
         n_squared = self._turn_load_factor_squared(v_turn = v_turn, R_turn = R_turn)
+
         tw = ((q_turn * self.C_D0) / self.ws) + (self.K/q_turn) * self.ws * n_squared
 
         return tw
@@ -97,12 +100,28 @@ class aircraft:
 
         return ws
 
+    def _v_min_drag(self):
+        "find the minimum drag velocity of the aircraft for rage of wing loadings"
+        v_md = np.sqrt((2 * self.ws / self.rho) * np.sqrt(self.K / self.C_D0))
+
+        return v_md
+
+    def tw_climb_rate(self, climb_rate: float):
+        """Get lisat of T/W values for a given climb rate"""
+        v_md = self._v_min_drag()
+        q_climb = self._dynamic_p(v_md)
+
+        tw = ((q_climb * self.C_D0) / self.ws) + ((self.K/q_climb) * self.ws) + (climb_rate/v_md)
+
+        return tw
+
     def build_all_constraints(
             self,
             v_stall: float,
             S_g: float,
             v_cruise_max: float,
             R_turn: float,
+            climb_rate: float,
             v_turn: float | None = None,
             CD_lof: float | None = None,
             CL_lof: float | None = None
@@ -129,7 +148,8 @@ class aircraft:
                 ("Stall_speed", "value"): self.ws_stall(v_stall = v_stall),
                 ("max_cruise_speed", "array"): self.tw_max_cruise_speed(v_cruise_max = v_cruise_max),
                 ("turn_radius", "array"): self.tw_turn_radius(v_turn = v_turn, R_turn = R_turn),
-                ("turn_stall", "value"): self.turn_stall_limit(v_turn = v_turn, R_turn = R_turn)
+                ("turn_stall", "value"): self.turn_stall_limit(v_turn = v_turn, R_turn = R_turn),
+                ("climb_rate", "array"): self.tw_climb_rate(climb_rate = climb_rate)
             }
         )
 
@@ -169,21 +189,22 @@ class aircraft:
             if key[1] == 'array':
                 ax.plot(self.ws, value, label = key[0], color=color)
             elif key[1] == 'value':
-                ax.vlines(value, 0.1, 0.5, label = key[0], color=color)
+                ax.vlines(value, 0, 2, label = key[0], color=color)
             else:
                 raise ValueError(f"The passed data type is not supported: {value}")
 
-        legend = ax.legend(loc = 'upper center')
+        legend = ax.legend(loc = 'upper right')
         plt.show()
 
 
-#Run program
+#main function to instantiate classes and give aircraft params
 def main():
     #run analysis for plane 1
     plane1 = aircraft()
-    plane1.build_all_constraints(v_stall = 10, S_g = 40, v_cruise_max = 22, R_turn = 100)
+    print(f"The turn load factor is: {plane1._turn_load_factor_squared(22, 100)}")
+    plane1.build_all_constraints(v_stall = 10, S_g = 40, v_cruise_max = 22, R_turn = 100, climb_rate = 3)
     plane1.plot_constraint_diagram()
 
-
+#run program
 if __name__ == "__main__":
     main()
