@@ -1,14 +1,14 @@
+from itertools import cycle
+
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.colors import TABLEAU_COLORS, same_color
 import typing
 import scipy.stats as spt
 
 """
 Calclulate and display a constraint diagram for the XTRA 2027 challenge ruleset
 """
-
-# Define hard aircraft params
-
 
 class aircraft:
     """Holder class for aircraft containing all properties and from which performance is calculated"""
@@ -75,14 +75,27 @@ class aircraft:
 
         return tw
 
+    def _turn_load_factor_squared(self, v_turn: float, R_turn: float):
+            """Helper to get the square of the load factor in a turn given the velocity and radius"""
+
+            n_squared = (((v_turn ** 2) / (self.g * R_turn)) ** 2) + 1
+
+            return n_squared
+
     def tw_turn_radius(self, v_turn, R_turn):
         """Calculate the T/W for a given turn radius at given turn speed"""
         q_turn = self._dynamic_p(v_turn)
-        n_squared = (((v_turn ** 2) / (self.g * R_turn)) ** 2) + 1
-
+        n_squared = self._turn_load_factor_squared(v_turn = v_turn, R_turn = R_turn)
         tw = ((q_turn * self.C_D0) / self.ws) + (self.K/q_turn) * self.ws * n_squared
 
         return tw
+
+    def turn_stall_limit(self, v_turn, R_turn):
+        """The maximum W/S for a sustained turn at given speed"""
+        n = np.sqrt(self._turn_load_factor_squared(v_turn = v_turn, R_turn = R_turn))
+        ws = self._dynamic_p(v = v_turn) * self.CL_max / n
+
+        return ws
 
     def build_all_constraints(
             self,
@@ -112,45 +125,51 @@ class aircraft:
         #Key is the constraint name and the data type, must be array or value to be plotted correctley
         self.constraints.update(
             {
-                ("ground_roll","array"): self.tw_ground_roll(S_g = S_g, CD_lof = CD_lof, CL_lof = CL_lof, v_stall = v_stall),
-                ("Stall_speed","value"): self.ws_stall(v_stall = v_stall),
+                ("ground_roll", "array"): self.tw_ground_roll(S_g = S_g, CD_lof = CD_lof, CL_lof = CL_lof, v_stall = v_stall),
+                ("Stall_speed", "value"): self.ws_stall(v_stall = v_stall),
                 ("max_cruise_speed", "array"): self.tw_max_cruise_speed(v_cruise_max = v_cruise_max),
-                ("turn_radius", "array"): self.tw_turn_radius(v_turn = v_turn, R_turn = R_turn)
+                ("turn_radius", "array"): self.tw_turn_radius(v_turn = v_turn, R_turn = R_turn),
+                ("turn_stall", "value"): self.turn_stall_limit(v_turn = v_turn, R_turn = R_turn)
             }
         )
 
     #builds graph with formatting
     def construct_graph(self):
         #set style of graphs
-        plt.style.use('bmh')
+        plt.style.use('tableau-colorblind10')
 
         #create graph objects
         fig, ax = plt.subplots()
 
         #graph limits
-        ax.set_ylim(0.1, 0.8)
+        ax.set_ylim(0.1, 0.8) #hard limit on t/w for a reasonable range
+        ax.set_xlim(self.ws[0], self.ws[-1])  #limit x axis to the computed range of w/s values 
 
         #Configure text displays on the graph
-        ax.set_xlabel("W/S")
-        ax.set_ylabel("T/W")
+        ax.set_xlabel(r"$W/S$")
+        ax.set_ylabel(r"$T/W$")
         ax.set_title("Sizing Constraint Diagram")
+
+        #set colors
+        colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
 
         #enable grid
         ax.grid(True, "both")
 
-        return (fig, ax)
+        return (fig, ax, colors)
     
     def plot_constraint_diagram(self):
         # Final output for the class, displays the constarint diagrams
-        fig, ax = self.construct_graph()
+        fig, ax, colors = self.construct_graph()
 
         #iterate over dictionary of constraints and plot
         for key, value in self.constraints.items():
+            color = next(colors)
             #Choose whether to pot claculated vales as an array aginst w/s or as a vertical w/s line
             if key[1] == 'array':
-                ax.plot(self.ws, value, label = key[0])
+                ax.plot(self.ws, value, label = key[0], color=color)
             elif key[1] == 'value':
-                ax.vlines(value, 0.1, 0.5, label = key[0])
+                ax.vlines(value, 0.1, 0.5, label = key[0], color=color)
             else:
                 raise ValueError(f"The passed data type is not supported: {value}")
 
