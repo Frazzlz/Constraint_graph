@@ -56,6 +56,10 @@ class aircraft:
         "Get the wing loading based on stall speed requirements"
         return self._dynamic_p(v_stall) * self.CL_max
 
+    def stall_velocity(self) -> np.ndarray:
+        """Calculate stall velocity for a range of wing loadings."""
+        return np.sqrt(2 * self.ws / (self.rho * self.CL_max))
+
     def tw_ground_roll(
         self, S_g: float, CD_lof: float, CL_lof: float, v_stall: float
     ) -> np.ndarray:
@@ -144,14 +148,13 @@ class aircraft:
         if not v_turn:
             v_turn = v_cruise_max
 
-        # Get various constraint tw values from entered list of target performance metrics
-        # Key is the constraint name and the data type, must be array or value to be plotted correctley
+        # Store each constraint by name and the plot type used to display it.
         self.constraints.update(
             {
                 ("ground_roll", "array"): self.tw_ground_roll(
                     S_g=S_g, CD_lof=CD_lof, CL_lof=CL_lof, v_stall=v_stall
                 ),
-                ("Stall_speed", "value"): self.ws_stall(v_stall=v_stall),
+                ("stall_speed", "secondary_array"): self.stall_velocity(),
                 ("max_cruise_speed", "array"): self.tw_max_cruise_speed(
                     v_cruise_max=v_cruise_max
                 ),
@@ -273,6 +276,9 @@ class aircraft:
     ):
         # Final output for the class, displays the constarint diagrams
         fig, ax, colors = self.construct_graph(aircraft_params, performance_targets)
+        stall_ax = ax.twinx()
+        stall_ax.spines["top"].set_visible(False)
+        stall_ax.set_ylabel("Stall velocity (m/s)")
 
         # iterate over dictionary of constraints and plot
         for key, value in self.constraints.items():
@@ -280,12 +286,29 @@ class aircraft:
             # Choose whether to pot claculated vales as an array aginst w/s or as a vertical w/s line
             if key[1] == "array":
                 ax.plot(self.ws, value, label=key[0], color=color)
+
+            elif key[1] == "secondary_array":
+                stall_ax.plot(
+                    self.ws,
+                    value,
+                    label=key[0],
+                    color=color,
+                    linestyle="dashed",
+                    alpha = 0.8
+                )
+
             elif key[1] == "value":
-                ax.vlines(value, 0, 2, label=key[0], color=color, linestyles = "dashed")
+                ax.vlines(value, 0, 2, label=key[0], color=color, linestyles="dashed")
+
+            elif key[1] == "point":
+                raise NotImplementedError
+
             else:
                 raise ValueError(f"The passed data type is not supported: {value}")
 
-        legend = ax.legend(loc="upper right")
+        handles, labels = ax.get_legend_handles_labels()
+        stall_handles, stall_labels = stall_ax.get_legend_handles_labels()
+        ax.legend(handles + stall_handles, labels + stall_labels, loc="upper right")
         plt.show()
 
 
