@@ -182,8 +182,8 @@ class aircraft:
         ax.set_xlim(self.ws[0], self.ws[-1])
         ax.set_ylim(0.1, 0.8)
 
-        ax.set_xlabel(r"Wing loading, $W/S$ (N/m$^2$)", labelpad=10)
-        ax.set_ylabel(r"Thrust-to-weight ratio, $T/W$", labelpad=10)
+        ax.set_xlabel(r"$W/S$ (N/m$^2$)", labelpad=10)
+        ax.set_ylabel(r"$T/W$", labelpad=10)
         ax.set_title("Aircraft Performance Constraints", pad=14, weight="bold")
 
         colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
@@ -207,8 +207,8 @@ class aircraft:
             "v_stall": ("Stall speed", "m/s"),
             "S_g": ("Ground roll distance", "m"),
             "v_cruise_max": ("Maximum cruise speed", "m/s"),
-            "R_turn": ("Turn radius", "m"),
             "climb_rate": ("Climb rate", "m/s"),
+            "R_turn": ("Turn radius", "m"),
             "v_turn": ("Turn speed", "m/s"),
         }
 
@@ -225,7 +225,12 @@ class aircraft:
             return "\n".join(lines)
 
         for info_ax, title, parameters, labels in (
-            (aircraft_info_ax, "Aircraft parameters", aircraft_params, aircraft_labels),
+            (
+                aircraft_info_ax,
+                "Aircraft parameters",
+                aircraft_params,
+                aircraft_labels
+            ),
             (
                 performance_info_ax,
                 "Assumed performance metrics",
@@ -276,7 +281,7 @@ class aircraft:
             if key[1] == "array":
                 ax.plot(self.ws, value, label=key[0], color=color)
             elif key[1] == "value":
-                ax.vlines(value, 0, 2, label=key[0], color=color)
+                ax.vlines(value, 0, 2, label=key[0], color=color, linestyles = "dashed")
             else:
                 raise ValueError(f"The passed data type is not supported: {value}")
 
@@ -288,18 +293,18 @@ class aircraft:
 def main():
     aircraft1_params = {
         "CL_max": 1.2,
-        "C_D0": 0.075,
+        "C_D0": 0.09,
         "roll_resistance": 0.1,
         "AR": 12,
         "oswald_e": 0.75
     }
     aircraft1_performance_targets = {
         "v_stall": 10,
-        "S_g": 60,
+        "S_g": 40,
         "v_cruise_max": 20,
-        "R_turn": 30,
+        "R_turn": 50,
         "climb_rate": 1.66,
-        "v_turn": 18
+        "v_turn": 20
     }
 
     # run analysis for plane 1
